@@ -159,6 +159,32 @@ que ningún otro chequeo lo detecte, así que si se vuelve a tocar este
 archivo conviene revisar `test_kleene_acepta_vacia_y_repite` y
 `test_plus_exige_al_menos_una_repeticion` en `tests/test_fase02.py`.
 
+### Construcción de subconjuntos (Fase 3)
+
+`analizador/subconjuntos.py` parte de `cerradura_epsilon({afn.inicial})` y
+recorre en anchura: por cada subconjunto y cada símbolo calcula
+`cerradura_epsilon(mover(T, a))`. Un estado del AFD es de aceptación si su
+subconjunto contiene **algún** estado de aceptación del AFN.
+
+Dos decisiones que conviene no revertir:
+
+- **El AFD queda parcial a propósito.** Si `cerradura_epsilon(mover(T, a))`
+  sale vacío no se crea estado ni transición; la simulación rechaza al no
+  encontrar a dónde ir. El sumidero solo aparece cuando alguien llama
+  `AFD.completar()`, que es lo que necesita Hopcroft. Así las tablas del
+  reporte no se llenan de un estado basura que el enunciado no pide.
+- **El alfabeto se fija de una vez** con el del AFN, aunque algún símbolo
+  no llegue a usarse, para que la tabla de transiciones tenga una columna
+  por símbolo de la expresión.
+
+La numeración de estados es estable entre corridas (recorrido en anchura
+con `deque` y símbolos ordenados). Esto importa porque las tablas y los
+dibujos del reporte deben poder regenerarse idénticos; hay una prueba que
+lo fija (`test_numeracion_estable_entre_corridas`).
+
+`listado_de_estados(afd)` produce el "listado de estados y las posiciones
+que conforma cada uno" que pide el enunciado, leyendo `AFD.origen`.
+
 ### Otras convenciones
 
 - Nombres de código, comentarios y docstrings **en español**, consistente con
@@ -182,14 +208,14 @@ archivo conviene revisar `test_kleene_acepta_vacia_y_repite` y
 | 0 | Estructuras base: objetos `AFN` y `AFD` | **Completa** |
 | 1 | Preprocesamiento, Shunting Yard, árbol sintáctico | **Completa** |
 | 2 | Construcción de Thompson (regex → AFN) | **Completa** |
-| 3 | Construcción de subconjuntos (AFN → AFD) | Pendiente |
+| 3 | Construcción de subconjuntos (AFN → AFD) | **Completa** |
 | 4 | Minimización con Hopcroft | Pendiente |
 | 5 | Simulación de AFN y AFD | Pendiente |
 | 6 | Dibujo de autómatas | Pendiente |
 | 7 | Procesamiento por lotes | Pendiente |
 | 8 | Interfaz de usuario | Pendiente |
 | 9 | Construcción directa de AFD (recuperación) | Pendiente |
-| 10 | Pruebas | Parcial (43 pruebas, fases 0-2) |
+| 10 | Pruebas | Parcial (54 pruebas, fases 0-3) |
 | 11 | Documentación y video | Pendiente |
 
 ### Estructura
@@ -202,12 +228,15 @@ proyecto1_teoria_computacion/
 │   ├── shunting_yard.py    Fase 1b: infix → postfix
 │   ├── arbol.py            Fase 1c: árbol sintáctico y numeración de posiciones
 │   ├── thompson.py         Fase 2: árbol sintáctico → AFN (construcción de Thompson)
+│   ├── subconjuntos.py     Fase 3: AFN → AFD (construcción de subconjuntos)
 │   └── automatas/
 │       ├── afn.py          Fase 0: AFN con cerradura_epsilon, mover
 │       └── afd.py          Fase 0: AFD con delta, completar, estados_alcanzables
 ├── tests/
+│   ├── apoyo.py            Simulación de AFN/AFD y generación de cadenas (andamio)
 │   ├── test_fase01.py      34 pruebas: tokens, shunting yard, árbol, AFN/AFD base
-│   └── test_fase02.py      9 pruebas: Thompson, incluyendo las 4 expresiones del curso
+│   ├── test_fase02.py      9 pruebas: Thompson, incluyendo las 4 expresiones del curso
+│   └── test_fase03.py      11 pruebas: subconjuntos y equivalencia AFN ↔ AFD
 ├── main.py                 Driver de demostración
 ├── expresiones.txt         Las cuatro expresiones del curso
 └── README.md
@@ -229,7 +258,7 @@ texto → [tokens] → Token[] → [shunting_yard] → Token[] postfix → [arbo
                                             ↓                                   ↓
                                     Thompson (Fase 2, completa)      Construcción directa (Fase 9)
                                             ↓                                   ↓
-                                           AFN ──── subconjuntos (Fase 3) ───→ AFD
+                                           AFN ── subconjuntos (Fase 3, ok) ──→ AFD
                                                                                 ↓
                                                                        Hopcroft (Fase 4)
 ```
@@ -239,7 +268,7 @@ texto → [tokens] → Token[] → [shunting_yard] → Token[] postfix → [arbo
 ```bash
 python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt
-python3 -m unittest discover -s tests -v         # 43 pruebas, todas pasando
+python3 -m unittest discover -s tests -v         # 54 pruebas, todas pasando
 ```
 
 Sin dependencias externas por ahora. Graphviz entra en la Fase 6 y requiere el
@@ -272,28 +301,51 @@ Aceptación verificada con el AFN de Thompson ya implementado (`test_fase02.py`,
 Posiciones esperadas: `(a|b)*abb(a|b)*` da 7 posiciones. `((ε|a)|b*)*` da solo
 **2** (`a` y `b`), porque epsilon no ocupa posición.
 
-## 8. Qué sigue y qué vigilar
+Tamaños de los autómatas ya generados (útiles como referencia rápida para
+detectar regresiones y para comparar contra el AFD mínimo de la Fase 4):
 
-**Fase 3 (subconjuntos).** Construir el AFD a partir del AFN de Thompson con
-`cerradura_epsilon`/`mover`, que ya existen en `AFN`. Cada subconjunto de
-estados del AFN se vuelve un estado del AFD; usar `AFD.origen` para guardar
-qué subconjunto originó cada estado (ya está el campo, solo falta llenarlo).
+| Expresión | Estados AFN | Estados AFD | Nota |
+|---|---|---|---|
+| `(a*\|b*)+` | 12 | 3 | los 3 son de aceptación: el lenguaje es Σ* |
+| `((ε\|a)\|b*)*` | 14 | 3 | también reconoce Σ* |
+| `(a\|b)*abb(a\|b)*` | 22 | 9 | el AFD clásico del libro para `abb` |
+| `0?(1?)?0*` | 14 | 4 | |
+
+Que las dos primeras expresiones reconozcan Σ* no es un error: `a*` y `b*`
+aceptan la cadena vacía, así que la unión bajo `+` (o bajo `*`) puede
+descomponer cualquier cadena en bloques de `a`s y de `b`s.
+
+## 8. Qué sigue y qué vigilar
 
 **Detalle conocido del árbol.** `0?(1?)?0*` produce un nodo `?` anidado dentro
 de otro `?`, porque así está escrita la expresión. Es correcto pero genera
 estados redundantes en Thompson. No simplificar: alteraría el árbol que pide el
 enunciado. Conviene mencionarlo en el video.
 
-**Fase 4 (Hopcroft).** Requiere el AFD completo; usar `AFD.completar()`, que
-agrega estado sumidero `-1`. Conviene eliminar estados inalcanzables antes de
-particionar (`AFD.estados_alcanzables()` ya existe).
+**Fase 4 (Hopcroft), lo que sigue.** Requiere el AFD completo; usar
+`AFD.completar()`, que agrega estado sumidero `-1`. Conviene eliminar estados
+inalcanzables antes de particionar (`AFD.estados_alcanzables()` ya existe).
+Hay dos AFDs de referencia para comprobar que la minimización realmente
+reduce y no rompe nada:
+
+- `(a*|b*)+` genera un AFD de **3 estados, todos de aceptación**, que
+  reconoce Σ*. Debe minimizar a **1 estado** con un bucle a sí mismo.
+- `(a|b)*abb(a|b)*` genera el AFD clásico de **9 estados** (0-3 rastrean el
+  progreso hacia `abb`, 4-8 son absorbentes de aceptación). Debe minimizar a
+  **4**: `{0,2}`, `{1}`, `{3}` y `{4..8}` fundidos.
+
+La prueba `test_completar_no_cambia_el_lenguaje` en `tests/test_fase03.py`
+ya verifica que agregar el sumidero no altera el lenguaje, así que el punto
+de partida de Hopcroft está cubierto.
 
 **Fase 5 (Simulación).** Debe comparar los resultados de los cuatro autómatas
 (AFN, AFD, AFD mínimo y, si se hace, AFD directo) y verificar que coincidan.
-Es la mejor prueba de regresión que tiene el proyecto. La función `acepta()`
-en `tests/test_fase02.py` ya sirve de base para la simulación de AFN — solo
-falta moverla a un módulo propio (`analizador/simulacion.py`) y agregar el
-equivalente para AFD (con `delta` en vez de `mover`+`cerradura_epsilon`).
+Es la mejor prueba de regresión que tiene el proyecto, y ya hay media hecha:
+`tests/apoyo.py` tiene `acepta_afn`, `acepta_afd` y `cadenas_hasta`, y
+`test_afn_y_afd_reconocen_el_mismo_lenguaje` compara AFN contra AFD sobre
+todas las cadenas de longitud 0 a 5. La Fase 5 debe **promover esas
+funciones a `analizador/simulacion.py`** (dejando de ser andamio de pruebas)
+y extender la comparación al AFD mínimo.
 
 **Fase 9 (Construcción directa).** Aumentar el árbol con `#` y usar su posición
 para decidir aceptación — no `max(posición)`. Y calcular `followpos` para `+`,

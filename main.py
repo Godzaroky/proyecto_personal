@@ -23,6 +23,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 from analizador.arbol import a_texto, construir, numerar_posiciones
 from analizador.errores import ErrorAnalizador
 from analizador.shunting_yard import a_postfix
+from analizador.subconjuntos import construir as construir_afd, listado_de_estados
 from analizador.thompson import construir as construir_afn
 from analizador.tokens import alfabeto_de, preparar, tokens_a_texto
 
@@ -82,6 +83,15 @@ def procesar(expresion: str, numero: int) -> None:
     print()
     print(f"AFN de Thompson: {afn!r}")
     print(afn.tabla_transiciones())
+
+    # Fase 3: construcción de subconjuntos (AFN -> AFD).
+    afd = construir_afd(afn)
+    print()
+    print(f"AFD por subconjuntos: {afd!r}")
+    print(afd.tabla_transiciones())
+    print()
+    print("Estados del AFD y el subconjunto del AFN que los origina:")
+    print(listado_de_estados(afd))
 
 
 def leer_expresiones(ruta: str) -> List[str]:

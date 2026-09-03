@@ -16,6 +16,7 @@ from .shunting_yard import a_postfix, convertir
 from .arbol import Nodo, TipoNodo, construir, numerar_posiciones
 from .automatas import AFD, AFN
 from .thompson import construir as construir_afn
+from .subconjuntos import construir as construir_afd
 
 __all__ = [
     "ErrorAnalizador",
@@ -35,4 +36,5 @@ __all__ = [
     "AFN",
     "AFD",
     "construir_afn",
+    "construir_afd",
 ]

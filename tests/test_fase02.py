@@ -3,26 +3,11 @@ Se ejecutan con:
     python3 -m unittest discover -s tests -v
 """
 
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from apoyo import acepta_afn as acepta, afn_de
 
-from analizador.arbol import construir  # noqa: E402
-from analizador.shunting_yard import convertir  # noqa: E402
-from analizador.thompson import construir as thompson  # noqa: E402
-
-
-def acepta(afn, cadena: str) -> bool:
-    actuales = afn.cerradura_epsilon({afn.inicial})
-    for caracter in cadena:
-        actuales = afn.cerradura_epsilon(afn.mover(actuales, caracter))
-    return afn.es_aceptacion(actuales)
-
-
-def afn_de(expresion: str):
-    return thompson(construir(convertir(expresion)))
+from analizador.tokens import EPSILON
 
 
 class PruebasThompson(unittest.TestCase):
@@ -78,7 +63,6 @@ class PruebasThompson(unittest.TestCase):
         self.assertTrue(acepta(afn, "ab"))
 
     def test_alfabeto_no_incluye_epsilon(self):
-        from analizador.tokens import EPSILON
         afn = afn_de("((ε|a)|b*)*")
         self.assertNotIn(EPSILON, afn.alfabeto)
 
