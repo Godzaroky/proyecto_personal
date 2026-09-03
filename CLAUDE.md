@@ -185,6 +185,34 @@ lo fija (`test_numeracion_estable_entre_corridas`).
 `listado_de_estados(afd)` produce el "listado de estados y las posiciones
 que conforma cada uno" que pide el enunciado, leyendo `AFD.origen`.
 
+### Minimización de Hopcroft (Fase 4)
+
+`analizador/hopcroft.py` refina la partición `{finales, no finales}` hasta
+que ningún símbolo distinga estados dentro de un bloque. Cada bloque queda
+como una clase de equivalencia de Myhill-Nerode y se vuelve un estado del
+AFD mínimo.
+
+El orden de las etapas importa: **primero se podan los inalcanzables**
+(`_podar`, usando `AFD.estados_alcanzables()`) y **después se completa**
+(`AFD.completar()`). Al revés, el sumidero absorbería las transiciones
+faltantes de estados que ni siquiera deberían existir.
+
+Lo que hace a esto Hopcroft y no Moore está en el refinamiento: cuando un
+bloque se parte y no estaba en la lista de pendientes, se encola solo **la
+mitad más pequeña**. Eso da O(n log n) en vez de O(n²).
+
+**El mínimo se devuelve parcial**, igual que el de la construcción de
+subconjuntos: al final se descartan los bloques estériles —aquellos desde
+los que ya no se llega a un final, incluido el sumidero que agregó
+`completar()`. El lenguaje no cambia y la tabla del reporte no carga un
+estado que el enunciado no pide. Hay prueba dedicada
+(`test_el_minimo_queda_parcial_sin_sumidero`).
+
+`construir_con_bloques(afd)` devuelve además el mapeo
+`estado mínimo -> estados del AFD original que se fundieron`, que es lo
+que el reporte y el video necesitan para explicar la minimización;
+`listado_de_bloques()` lo formatea.
+
 ### Otras convenciones
 
 - Nombres de código, comentarios y docstrings **en español**, consistente con
@@ -209,13 +237,13 @@ que conforma cada uno" que pide el enunciado, leyendo `AFD.origen`.
 | 1 | Preprocesamiento, Shunting Yard, árbol sintáctico | **Completa** |
 | 2 | Construcción de Thompson (regex → AFN) | **Completa** |
 | 3 | Construcción de subconjuntos (AFN → AFD) | **Completa** |
-| 4 | Minimización con Hopcroft | Pendiente |
+| 4 | Minimización con Hopcroft | **Completa** |
 | 5 | Simulación de AFN y AFD | Pendiente |
 | 6 | Dibujo de autómatas | Pendiente |
 | 7 | Procesamiento por lotes | Pendiente |
 | 8 | Interfaz de usuario | Pendiente |
 | 9 | Construcción directa de AFD (recuperación) | Pendiente |
-| 10 | Pruebas | Parcial (54 pruebas, fases 0-3) |
+| 10 | Pruebas | Parcial (68 pruebas, fases 0-4) |
 | 11 | Documentación y video | Pendiente |
 
 ### Estructura
@@ -229,6 +257,7 @@ proyecto1_teoria_computacion/
 │   ├── arbol.py            Fase 1c: árbol sintáctico y numeración de posiciones
 │   ├── thompson.py         Fase 2: árbol sintáctico → AFN (construcción de Thompson)
 │   ├── subconjuntos.py     Fase 3: AFN → AFD (construcción de subconjuntos)
+│   ├── hopcroft.py         Fase 4: minimización del AFD
 │   └── automatas/
 │       ├── afn.py          Fase 0: AFN con cerradura_epsilon, mover
 │       └── afd.py          Fase 0: AFD con delta, completar, estados_alcanzables
@@ -236,7 +265,8 @@ proyecto1_teoria_computacion/
 │   ├── apoyo.py            Simulación de AFN/AFD y generación de cadenas (andamio)
 │   ├── test_fase01.py      34 pruebas: tokens, shunting yard, árbol, AFN/AFD base
 │   ├── test_fase02.py      9 pruebas: Thompson, incluyendo las 4 expresiones del curso
-│   └── test_fase03.py      11 pruebas: subconjuntos y equivalencia AFN ↔ AFD
+│   ├── test_fase03.py      11 pruebas: subconjuntos y equivalencia AFN ↔ AFD
+│   └── test_fase04.py      14 pruebas: Hopcroft, tamaños y partición esperados
 ├── main.py                 Driver de demostración
 ├── expresiones.txt         Las cuatro expresiones del curso
 └── README.md
@@ -268,7 +298,7 @@ texto → [tokens] → Token[] → [shunting_yard] → Token[] postfix → [arbo
 ```bash
 python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt
-python3 -m unittest discover -s tests -v         # 54 pruebas, todas pasando
+python3 -m unittest discover -s tests -v         # 68 pruebas, todas pasando
 ```
 
 Sin dependencias externas por ahora. Graphviz entra en la Fase 6 y requiere el
@@ -304,12 +334,17 @@ Posiciones esperadas: `(a|b)*abb(a|b)*` da 7 posiciones. `((ε|a)|b*)*` da solo
 Tamaños de los autómatas ya generados (útiles como referencia rápida para
 detectar regresiones y para comparar contra el AFD mínimo de la Fase 4):
 
-| Expresión | Estados AFN | Estados AFD | Nota |
-|---|---|---|---|
-| `(a*\|b*)+` | 12 | 3 | los 3 son de aceptación: el lenguaje es Σ* |
-| `((ε\|a)\|b*)*` | 14 | 3 | también reconoce Σ* |
-| `(a\|b)*abb(a\|b)*` | 22 | 9 | el AFD clásico del libro para `abb` |
-| `0?(1?)?0*` | 14 | 4 | |
+| Expresión | AFN | AFD | AFD mínimo | Nota |
+|---|---|---|---|---|
+| `(a*\|b*)+` | 12 | 3 | 1 | los 3 son de aceptación: el lenguaje es Σ* |
+| `((ε\|a)\|b*)*` | 14 | 3 | 1 | también reconoce Σ* |
+| `(a\|b)*abb(a\|b)*` | 22 | 9 | 4 | el AFD clásico del libro para `abb` |
+| `0?(1?)?0*` | 14 | 4 | 3 | |
+
+El AFD mínimo de `(a|b)*abb(a|b)*` es el del libro: `q0` sin progreso, `q1`
+vio `a`, `q2` vio `ab`, `q3` absorbente de aceptación. La partición es
+`{A0,A2}`, `{A1}`, `{A3}`, `{A4..A8}`, y hay una prueba que la fija
+(`test_bloques_del_afd_clasico`).
 
 Que las dos primeras expresiones reconozcan Σ* no es un error: `a*` y `b*`
 aceptan la cadena vacía, así que la unión bajo `+` (o bajo `*`) puede
@@ -322,30 +357,22 @@ de otro `?`, porque así está escrita la expresión. Es correcto pero genera
 estados redundantes en Thompson. No simplificar: alteraría el árbol que pide el
 enunciado. Conviene mencionarlo en el video.
 
-**Fase 4 (Hopcroft), lo que sigue.** Requiere el AFD completo; usar
-`AFD.completar()`, que agrega estado sumidero `-1`. Conviene eliminar estados
-inalcanzables antes de particionar (`AFD.estados_alcanzables()` ya existe).
-Hay dos AFDs de referencia para comprobar que la minimización realmente
-reduce y no rompe nada:
-
-- `(a*|b*)+` genera un AFD de **3 estados, todos de aceptación**, que
-  reconoce Σ*. Debe minimizar a **1 estado** con un bucle a sí mismo.
-- `(a|b)*abb(a|b)*` genera el AFD clásico de **9 estados** (0-3 rastrean el
-  progreso hacia `abb`, 4-8 son absorbentes de aceptación). Debe minimizar a
-  **4**: `{0,2}`, `{1}`, `{3}` y `{4..8}` fundidos.
-
-La prueba `test_completar_no_cambia_el_lenguaje` en `tests/test_fase03.py`
-ya verifica que agregar el sumidero no altera el lenguaje, así que el punto
-de partida de Hopcroft está cubierto.
-
-**Fase 5 (Simulación).** Debe comparar los resultados de los cuatro autómatas
-(AFN, AFD, AFD mínimo y, si se hace, AFD directo) y verificar que coincidan.
-Es la mejor prueba de regresión que tiene el proyecto, y ya hay media hecha:
+**Fase 5 (Simulación), lo que sigue.** Es lo único que falta para cerrar los
+15 puntos base. Casi todo el trabajo ya está hecho como andamio de pruebas:
 `tests/apoyo.py` tiene `acepta_afn`, `acepta_afd` y `cadenas_hasta`, y
-`test_afn_y_afd_reconocen_el_mismo_lenguaje` compara AFN contra AFD sobre
-todas las cadenas de longitud 0 a 5. La Fase 5 debe **promover esas
-funciones a `analizador/simulacion.py`** (dejando de ser andamio de pruebas)
-y extender la comparación al AFD mínimo.
+`test_los_tres_automatas_coinciden` (en `tests/test_fase04.py`) ya compara
+AFN, AFD y AFD mínimo sobre todas las cadenas de longitud 0 a 4.
+
+Lo que falta es **promover esas funciones a `analizador/simulacion.py`**
+—dejando de ser andamio— y darles la interfaz que pide el enunciado:
+recibir una cadena `w` del usuario, correrla sobre cada autómata y
+reportar sí/no en cada uno. La comparación entre autómatas debe quedar
+como verificación visible, no solo como prueba.
+
+Detalle a cuidar: `acepta_afd` debe seguir rechazando cuando `delta`
+devuelve `None`. Tanto el AFD de subconjuntos como el mínimo son
+parciales por decisión de diseño, así que la ausencia de transición
+**es** el rechazo.
 
 **Fase 9 (Construcción directa).** Aumentar el árbol con `#` y usar su posición
 para decidir aceptación — no `max(posición)`. Y calcular `followpos` para `+`,

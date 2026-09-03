@@ -18,6 +18,7 @@ from analizador.arbol import construir as construir_arbol  # noqa: E402
 from analizador.automatas.afd import AFD  # noqa: E402
 from analizador.automatas.afn import AFN  # noqa: E402
 from analizador.shunting_yard import convertir  # noqa: E402
+from analizador.hopcroft import construir as construir_minimo  # noqa: E402
 from analizador.subconjuntos import construir as construir_afd  # noqa: E402
 from analizador.thompson import construir as construir_afn  # noqa: E402
 
@@ -38,6 +39,11 @@ def afn_de(expresion: str) -> AFN:
 def afd_de(expresion: str) -> AFD:
     """Atajo: expresión regular -> AFD por subconjuntos."""
     return construir_afd(afn_de(expresion))
+
+
+def minimo_de(expresion: str) -> AFD:
+    """Atajo: expresión regular -> AFD mínimo por Hopcroft."""
+    return construir_minimo(afd_de(expresion))
 
 
 def acepta_afn(afn: AFN, cadena: str) -> bool:

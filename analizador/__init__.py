@@ -17,6 +17,7 @@ from .arbol import Nodo, TipoNodo, construir, numerar_posiciones
 from .automatas import AFD, AFN
 from .thompson import construir as construir_afn
 from .subconjuntos import construir as construir_afd
+from .hopcroft import construir as minimizar
 
 __all__ = [
     "ErrorAnalizador",
@@ -37,4 +38,5 @@ __all__ = [
     "AFD",
     "construir_afn",
     "construir_afd",
+    "minimizar",
 ]

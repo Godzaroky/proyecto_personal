@@ -23,6 +23,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 from analizador.arbol import a_texto, construir, numerar_posiciones
 from analizador.errores import ErrorAnalizador
 from analizador.shunting_yard import a_postfix
+from analizador.hopcroft import construir_con_bloques, listado_de_bloques
 from analizador.subconjuntos import construir as construir_afd, listado_de_estados
 from analizador.thompson import construir as construir_afn
 from analizador.tokens import alfabeto_de, preparar, tokens_a_texto
@@ -92,6 +93,16 @@ def procesar(expresion: str, numero: int) -> None:
     print()
     print("Estados del AFD y el subconjunto del AFN que los origina:")
     print(listado_de_estados(afd))
+
+    # Fase 4: minimización con Hopcroft.
+    minimo, bloques = construir_con_bloques(afd)
+    print()
+    print(f"AFD mínimo (Hopcroft): {minimo!r}")
+    print(f"Reducción: {len(afd.estados)} estados -> {len(minimo.estados)}")
+    print(minimo.tabla_transiciones())
+    print()
+    print("Estados del AFD mínimo y los estados del AFD que se fundieron:")
+    print(listado_de_bloques(bloques))
 
 
 def leer_expresiones(ruta: str) -> List[str]:
