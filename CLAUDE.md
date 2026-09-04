@@ -213,6 +213,36 @@ estado que el enunciado no pide. Hay prueba dedicada
 que el reporte y el video necesitan para explicar la minimización;
 `listado_de_bloques()` lo formatea.
 
+### Simulación (Fase 5)
+
+`analizador/simulacion.py` decide si una cadena `w` pertenece al lenguaje.
+El AFN sigue un **conjunto** de estados (`cerradura_epsilon(mover(...))`);
+el AFD sigue **uno solo** (`delta`).
+
+`recorrido_afn`/`recorrido_afd` devuelven la traza completa y
+`acepta_afn`/`acepta_afd` se construyen encima, para que no existan dos
+implementaciones del mismo recorrido que puedan divergir.
+
+Tres puntos que conviene no romper:
+
+- **`delta() is None` es rechazo, no error.** Tanto el AFD de subconjuntos
+  como el mínimo son parciales por decisión de diseño, así que la ausencia
+  de transición es la forma normal de rechazar.
+- **Un símbolo fuera del alfabeto se ataja antes de llamar a `mover`.**
+  `AFN.mover` lanza `ErrorDeAutomata` si recibe epsilon, y `w` puede traer
+  el carácter `ε` perfectamente —un usuario que lo teclea creyendo que
+  significa "cadena vacía"—. Sin el atajo, el programa revienta en vez de
+  rechazar. Hay prueba de regresión
+  (`test_epsilon_en_la_cadena_se_rechaza_sin_reventar`).
+- **La comparación de los tres autómatas es visible, no solo interna.**
+  `simular()` devuelve un `Resultado` con el veredicto de cada uno y la
+  propiedad `coinciden`; `formatear()` lo imprime y avisa a gritos si
+  discrepan, porque eso significaría un bug en alguna fase anterior.
+
+`simbolos_desconocidos()` no cambia el veredicto —la cadena se rechaza
+igual— pero permite avisarle al usuario que escribió símbolos que no están
+en el alfabeto de la expresión.
+
 ### Otras convenciones
 
 - Nombres de código, comentarios y docstrings **en español**, consistente con
@@ -238,12 +268,12 @@ que el reporte y el video necesitan para explicar la minimización;
 | 2 | Construcción de Thompson (regex → AFN) | **Completa** |
 | 3 | Construcción de subconjuntos (AFN → AFD) | **Completa** |
 | 4 | Minimización con Hopcroft | **Completa** |
-| 5 | Simulación de AFN y AFD | Pendiente |
+| 5 | Simulación de AFN y AFD | **Completa** |
 | 6 | Dibujo de autómatas | Pendiente |
 | 7 | Procesamiento por lotes | Pendiente |
 | 8 | Interfaz de usuario | Pendiente |
 | 9 | Construcción directa de AFD (recuperación) | Pendiente |
-| 10 | Pruebas | Parcial (68 pruebas, fases 0-4) |
+| 10 | Pruebas | Parcial (83 pruebas, fases 0-5) |
 | 11 | Documentación y video | Pendiente |
 
 ### Estructura
@@ -258,15 +288,17 @@ proyecto1_teoria_computacion/
 │   ├── thompson.py         Fase 2: árbol sintáctico → AFN (construcción de Thompson)
 │   ├── subconjuntos.py     Fase 3: AFN → AFD (construcción de subconjuntos)
 │   ├── hopcroft.py         Fase 4: minimización del AFD
+│   ├── simulacion.py       Fase 5: simulación de AFN/AFD y comparación
 │   └── automatas/
 │       ├── afn.py          Fase 0: AFN con cerradura_epsilon, mover
 │       └── afd.py          Fase 0: AFD con delta, completar, estados_alcanzables
 ├── tests/
-│   ├── apoyo.py            Simulación de AFN/AFD y generación de cadenas (andamio)
+│   ├── apoyo.py            Atajos a cada autómata y generación de cadenas
 │   ├── test_fase01.py      34 pruebas: tokens, shunting yard, árbol, AFN/AFD base
 │   ├── test_fase02.py      9 pruebas: Thompson, incluyendo las 4 expresiones del curso
 │   ├── test_fase03.py      11 pruebas: subconjuntos y equivalencia AFN ↔ AFD
-│   └── test_fase04.py      14 pruebas: Hopcroft, tamaños y partición esperados
+│   ├── test_fase04.py      14 pruebas: Hopcroft, tamaños y partición esperados
+│   └── test_fase05.py      15 pruebas: simulación, recorridos y comparación
 ├── main.py                 Driver de demostración
 ├── expresiones.txt         Las cuatro expresiones del curso
 └── README.md
@@ -298,7 +330,9 @@ texto → [tokens] → Token[] → [shunting_yard] → Token[] postfix → [arbo
 ```bash
 python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt
-python3 -m unittest discover -s tests -v         # 68 pruebas, todas pasando
+python3 main.py expresiones.txt abba             # además simula w = "abba"
+python3 main.py expresiones.txt ""               # simula la cadena vacía
+python3 -m unittest discover -s tests -v         # 83 pruebas, todas pasando
 ```
 
 Sin dependencias externas por ahora. Graphviz entra en la Fase 6 y requiere el
@@ -357,22 +391,22 @@ de otro `?`, porque así está escrita la expresión. Es correcto pero genera
 estados redundantes en Thompson. No simplificar: alteraría el árbol que pide el
 enunciado. Conviene mencionarlo en el video.
 
-**Fase 5 (Simulación), lo que sigue.** Es lo único que falta para cerrar los
-15 puntos base. Casi todo el trabajo ya está hecho como andamio de pruebas:
-`tests/apoyo.py` tiene `acepta_afn`, `acepta_afd` y `cadenas_hasta`, y
-`test_los_tres_automatas_coinciden` (en `tests/test_fase04.py`) ya compara
-AFN, AFD y AFD mínimo sobre todas las cadenas de longitud 0 a 4.
+**Los 15 puntos base ya están cubiertos** (Shunting Yard, Thompson,
+subconjuntos, minimización y simulación). Lo que queda son las fases de
+presentación —dibujo, lotes, interfaz—, la recuperación y la entrega.
 
-Lo que falta es **promover esas funciones a `analizador/simulacion.py`**
-—dejando de ser andamio— y darles la interfaz que pide el enunciado:
-recibir una cadena `w` del usuario, correrla sobre cada autómata y
-reportar sí/no en cada uno. La comparación entre autómatas debe quedar
-como verificación visible, no solo como prueba.
+**Fase 6 (Dibujo), lo que sigue.** Es lo de mayor valor visible para el
+video. Requiere el **binario** de Graphviz instalado en el sistema, no
+solo el paquete de Python; en la máquina de desarrollo todavía no está.
+Conviene que el módulo genere el texto DOT aunque Graphviz no esté
+instalado, y que solo la conversión a PNG dependa del binario: así el
+proyecto no se vuelve inejecutable en una máquina sin Graphviz. Ya hay
+de dónde sacar las etiquetas: `AFD.origen` para los subconjuntos y
+`listado_de_bloques()` para la minimización.
 
-Detalle a cuidar: `acepta_afd` debe seguir rechazando cuando `delta`
-devuelve `None`. Tanto el AFD de subconjuntos como el mínimo son
-parciales por decisión de diseño, así que la ausencia de transición
-**es** el rechazo.
+**Fase 7 (Lotes).** `main.py` ya recorre un archivo con una expresión por
+línea, que es lo que exige el enunciado; falta decidir si se agrega
+salida a archivo (la carpeta `salida/` ya está en `.gitignore`).
 
 **Fase 9 (Construcción directa).** Aumentar el árbol con `#` y usar su posición
 para decidir aceptación — no `max(posición)`. Y calcular `followpos` para `+`,

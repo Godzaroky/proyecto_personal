@@ -18,6 +18,7 @@ from .automatas import AFD, AFN
 from .thompson import construir as construir_afn
 from .subconjuntos import construir as construir_afd
 from .hopcroft import construir as minimizar
+from .simulacion import Resultado, acepta_afd, acepta_afn, simular
 
 __all__ = [
     "ErrorAnalizador",
@@ -39,4 +40,8 @@ __all__ = [
     "construir_afn",
     "construir_afd",
     "minimizar",
+    "Resultado",
+    "acepta_afn",
+    "acepta_afd",
+    "simular",
 ]

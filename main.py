@@ -4,17 +4,23 @@ Proyecto #1 - Analizador léxico
 Teoría de la Computación (CC2019), Sección 30
 
 Lee un archivo con una expresión regular por línea y, para cada una,
-muestra la tokenización, la expresión con concatenación explícita, la
-notación postfix y el árbol sintáctico con sus posiciones numeradas.
+muestra la tokenización, el postfix, el árbol sintáctico, el AFN de
+Thompson, el AFD por subconjuntos y el AFD mínimo de Hopcroft.
+
+Si además se indica una cadena w, la simula sobre los tres autómatas y
+reporta si pertenece al lenguaje.
 
 Uso:
-    python3 main.py [archivo]
+    python3 main.py [archivo] [cadena]
 
-Si no se indica archivo se usa expresiones.txt.
+Si no se indica archivo se usa expresiones.txt. Para simular la cadena
+vacía se pasa una cadena vacía explícita:
+
+    python3 main.py expresiones.txt ""
 """
 
 import sys
-from typing import List
+from typing import List, Optional
 
 # En Windows la consola suele usar cp1252, que no puede imprimir ε, ├, └, etc.
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -24,6 +30,7 @@ from analizador.arbol import a_texto, construir, numerar_posiciones
 from analizador.errores import ErrorAnalizador
 from analizador.shunting_yard import a_postfix
 from analizador.hopcroft import construir_con_bloques, listado_de_bloques
+from analizador.simulacion import formatear, simbolos_desconocidos, simular
 from analizador.subconjuntos import construir as construir_afd, listado_de_estados
 from analizador.thompson import construir as construir_afn
 from analizador.tokens import alfabeto_de, preparar, tokens_a_texto
@@ -47,8 +54,11 @@ def encabezado() -> None:
     print(separador())
 
 
-def procesar(expresion: str, numero: int) -> None:
-    """Ejecuta las fases 0 y 1 sobre una sola expresión regular."""
+def procesar(expresion: str, numero: int, cadena: Optional[str] = None) -> None:
+    """
+    Ejecuta el pipeline completo sobre una expresión regular. Si se
+    indica una cadena, además la simula sobre los tres autómatas.
+    """
     print()
     print(separador())
     print(f"EXPRESIÓN #{numero}: {expresion}")
@@ -104,6 +114,20 @@ def procesar(expresion: str, numero: int) -> None:
     print("Estados del AFD mínimo y los estados del AFD que se fundieron:")
     print(listado_de_bloques(bloques))
 
+    # Fase 5: simulación de la cadena w sobre los tres autómatas.
+    if cadena is None:
+        return
+
+    print()
+    print("Simulación:")
+
+    desconocidos = simbolos_desconocidos(afn, cadena)
+    if desconocidos:
+        ajenos = ", ".join(repr(s) for s in sorted(desconocidos))
+        print(f"  [aviso] w usa símbolos fuera del alfabeto: {ajenos}")
+
+    print(formatear(simular(afn, afd, minimo, cadena)))
+
 
 def leer_expresiones(ruta: str) -> List[str]:
     """Lee el archivo y devuelve las líneas no vacías."""
@@ -113,6 +137,8 @@ def leer_expresiones(ruta: str) -> List[str]:
 
 def main() -> int:
     ruta = sys.argv[1] if len(sys.argv) > 1 else "expresiones.txt"
+    # Se distingue "no se pidió simular" de "simular la cadena vacía".
+    cadena = sys.argv[2] if len(sys.argv) > 2 else None
 
     encabezado()
 
@@ -124,11 +150,13 @@ def main() -> int:
 
     print(f"Archivo    : {ruta}")
     print(f"Expresiones: {len(expresiones)}")
+    if cadena is not None:
+        print(f"Cadena w   : {cadena!r}" if cadena else "Cadena w   : (vacía)")
 
     fallidas = 0
     for numero, expresion in enumerate(expresiones, start=1):
         try:
-            procesar(expresion, numero)
+            procesar(expresion, numero, cadena)
         except ErrorAnalizador as error:
             fallidas += 1
             print()
