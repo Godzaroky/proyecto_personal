@@ -43,13 +43,31 @@ python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt                 # otro archivo de expresiones
 python3 main.py expresiones.txt abba             # además simula w = "abba"
 python3 main.py expresiones.txt ""               # simula la cadena vacía
-python3 -m unittest discover -s tests -v         # ejecuta las 91 pruebas
+python3 main.py --html                           # reporte HTML en salida/reporte.html
+python3 main.py --salida reporte.html            # reporte en otra ruta
+python3 -m unittest discover -s tests -v         # ejecuta las 109 pruebas
 ```
 
 Para cada expresión el programa imprime la tokenización, el postfix, el árbol
 sintáctico con sus posiciones numeradas, las tablas de transiciones del AFN, del
 AFD y del AFD mínimo, el listado de estados con su subconjunto de origen y —si se
 indicó una cadena— el resultado de la simulación en los tres autómatas.
+
+### Reporte HTML
+
+Con `--html` esa misma información se escribe como página web en lugar de
+volcarse a la consola, con las tablas de transiciones como tablas reales y una
+sección por expresión. El archivo es autocontenido —el CSS va incrustado y no
+carga ningún recurso externo—, así que funciona sin conexión y se puede mover
+o enviar solo.
+
+El documento incluye reglas `@media print`, de modo que **abrirlo en el navegador
+y usar Imprimir → Guardar como PDF** produce un PDF con una página por expresión.
+Se optó por esta vía en lugar de generar el PDF directamente porque no agrega
+ninguna dependencia al proyecto.
+
+Con `--html` la consola solo muestra un resumen de una línea por expresión y la
+ruta del archivo generado.
 
 ## 3. Arquitectura
 
@@ -69,12 +87,13 @@ proyecto1_teoria_computacion/
 │   ├── subconjuntos.py     AFN → AFD
 │   ├── hopcroft.py         AFD → AFD mínimo
 │   ├── simulacion.py       Simulación de AFN y AFD sobre una cadena
+│   ├── reporte.py          Pipeline completo y generación del reporte HTML
 │   └── automatas/
 │       ├── afn.py          Objeto AFN
 │       └── afd.py          Objeto AFD
 ├── docs/
 │   └── DISEÑO.md           Este documento
-├── tests/                  91 pruebas unitarias
+├── tests/                  109 pruebas unitarias
 ├── main.py                 Interfaz de línea de comandos
 └── expresiones.txt         Las cuatro expresiones del curso
 ```
@@ -90,6 +109,7 @@ proyecto1_teoria_computacion/
 | `subconjuntos` | `AFN` | `AFD` | Determinizar agrupando estados en subconjuntos |
 | `hopcroft` | `AFD` | `AFD` | Fundir estados equivalentes |
 | `simulacion` | `AFN`/`AFD` + `str` | `bool` | Decidir la pertenencia de la cadena al lenguaje |
+| `reporte` | `str` | `Analisis` / HTML | Encadenar el pipeline y generar el reporte |
 | `errores` | — | — | Excepciones comunes a todos los módulos |
 
 ## 4. Protocolos de comunicación entre módulos
@@ -450,7 +470,7 @@ alteraría el árbol sintáctico que corresponde a la expresión dada.
 
 ## 10. Pruebas
 
-91 pruebas unitarias, todas pasando:
+109 pruebas unitarias, todas pasando:
 
 | Archivo | Pruebas | Cubre |
 |---|---|---|
@@ -460,6 +480,7 @@ alteraría el árbol sintáctico que corresponde a la expresión dada.
 | `test_fase04.py` | 14 | Minimización, tamaños y partición esperados |
 | `test_fase05.py` | 15 | Simulación, recorridos y comparación entre autómatas |
 | `test_main.py` | 8 | Interfaz de línea de comandos: ubicación del archivo, simulación y manejo de errores |
+| `test_reporte.py` | 18 | Generación del reporte HTML, escapado y manejo de expresiones inválidas |
 
 La verificación más fuerte del proyecto es la **equivalencia exhaustiva**: para cada
 expresión del curso se generan todas las cadenas de longitud 0 a 5 sobre su alfabeto

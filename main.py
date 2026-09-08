@@ -11,14 +11,19 @@ Si además se indica una cadena w, la simula sobre los tres autómatas y
 reporta si pertenece al lenguaje.
 
 Uso:
-    python3 main.py [archivo] [cadena]
+    python3 main.py [archivo] [cadena] [--html] [--salida RUTA]
 
 Si no se indica archivo se usa expresiones.txt. Para simular la cadena
 vacía se pasa una cadena vacía explícita:
 
     python3 main.py expresiones.txt ""
+
+Con --html el resultado se escribe como página web en vez de volcarse a
+la consola. Ese archivo se abre en cualquier navegador y desde ahí se
+obtiene un PDF con "Imprimir → Guardar como PDF".
 """
 
+import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -27,14 +32,10 @@ from typing import List, Optional
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
-from analizador.arbol import a_texto, construir, numerar_posiciones
-from analizador.errores import ErrorAnalizador
-from analizador.shunting_yard import a_postfix
-from analizador.hopcroft import construir_con_bloques, listado_de_bloques
-from analizador.simulacion import formatear, simbolos_desconocidos, simular
-from analizador.subconjuntos import construir as construir_afd, listado_de_estados
-from analizador.thompson import construir as construir_afn
-from analizador.tokens import alfabeto_de, preparar, tokens_a_texto
+from analizador.hopcroft import listado_de_bloques
+from analizador.reporte import Analisis, a_html, analizar
+from analizador.simulacion import formatear
+from analizador.subconjuntos import listado_de_estados
 
 ANCHO = 72
 
@@ -43,6 +44,7 @@ ANCHO = 72
 # funcione igual sin importar desde dónde se invoque.
 AQUI = Path(__file__).resolve().parent
 ARCHIVO_POR_OMISION = "expresiones.txt"
+REPORTE_POR_OMISION = "salida/reporte.html"
 
 
 def separador(caracter: str = "=") -> str:
@@ -61,79 +63,64 @@ def encabezado() -> None:
     print(separador())
 
 
-def procesar(expresion: str, numero: int, cadena: Optional[str] = None) -> None:
-    """
-    Ejecuta el pipeline completo sobre una expresión regular. Si se
-    indica una cadena, además la simula sobre los tres autómatas.
-    """
+def imprimir(analisis: Analisis, numero: int) -> None:
+    """Vuelca a la consola todo lo que el pipeline produjo."""
     print()
     print(separador())
-    print(f"EXPRESIÓN #{numero}: {expresion}")
+    print(f"EXPRESIÓN #{numero}: {analisis.expresion}")
     print(separador())
 
-    # Fase 1a: tokenización, concatenación implícita y validación.
-    tokens = preparar(expresion)
-    print(f"Con concatenación explícita : {tokens_a_texto(tokens)}")
-    print(f"Alfabeto                    : {{{', '.join(sorted(alfabeto_de(tokens)))}}}")
+    if not analisis.valido:
+        print(f"[ERROR] {analisis.error}")
+        return
 
-    # Fase 1b: Shunting Yard.
-    postfix = a_postfix(tokens, expresion)
-    print(f"Postfix                     : {tokens_a_texto(postfix)}")
-
-    # Fase 1c: árbol sintáctico y numeración de posiciones.
-    raiz = construir(postfix)
-    posiciones = numerar_posiciones(raiz)
+    print(f"Con concatenación explícita : {analisis.con_concatenacion}")
+    print(f"Alfabeto                    : {{{', '.join(analisis.alfabeto)}}}")
+    print(f"Postfix                     : {analisis.postfix}")
 
     print()
     print("Árbol sintáctico:")
-    print(a_texto(raiz))
+    print(analisis.arbol)
 
     print()
     print("Posiciones de los símbolos:")
-    if posiciones:
-        for numero_posicion, simbolo in posiciones:
-            print(f"  {numero_posicion}: '{simbolo}'")
+    if analisis.posiciones:
+        for posicion, simbolo in analisis.posiciones:
+            print(f"  {posicion}: '{simbolo}'")
     else:
         print("  (ninguna: la expresión solo genera la cadena vacía)")
 
-    # Fase 2: construcción de Thompson (regex -> AFN).
-    afn = construir_afn(raiz)
     print()
-    print(f"AFN de Thompson: {afn!r}")
-    print(afn.tabla_transiciones())
+    print(f"AFN de Thompson: {analisis.afn!r}")
+    print(analisis.afn.tabla_transiciones())
 
-    # Fase 3: construcción de subconjuntos (AFN -> AFD).
-    afd = construir_afd(afn)
     print()
-    print(f"AFD por subconjuntos: {afd!r}")
-    print(afd.tabla_transiciones())
+    print(f"AFD por subconjuntos: {analisis.afd!r}")
+    print(analisis.afd.tabla_transiciones())
     print()
     print("Estados del AFD y el subconjunto del AFN que los origina:")
-    print(listado_de_estados(afd))
+    print(listado_de_estados(analisis.afd))
 
-    # Fase 4: minimización con Hopcroft.
-    minimo, bloques = construir_con_bloques(afd)
     print()
-    print(f"AFD mínimo (Hopcroft): {minimo!r}")
-    print(f"Reducción: {len(afd.estados)} estados -> {len(minimo.estados)}")
-    print(minimo.tabla_transiciones())
+    print(f"AFD mínimo (Hopcroft): {analisis.minimo!r}")
+    print(
+        f"Reducción: {len(analisis.afd.estados)} estados -> "
+        f"{len(analisis.minimo.estados)}"
+    )
+    print(analisis.minimo.tabla_transiciones())
     print()
     print("Estados del AFD mínimo y los estados del AFD que se fundieron:")
-    print(listado_de_bloques(bloques))
+    print(listado_de_bloques(analisis.bloques))
 
-    # Fase 5: simulación de la cadena w sobre los tres autómatas.
-    if cadena is None:
+    if analisis.resultado is None:
         return
 
     print()
     print("Simulación:")
-
-    desconocidos = simbolos_desconocidos(afn, cadena)
-    if desconocidos:
-        ajenos = ", ".join(repr(s) for s in sorted(desconocidos))
+    if analisis.desconocidos:
+        ajenos = ", ".join(repr(s) for s in analisis.desconocidos)
         print(f"  [aviso] w usa símbolos fuera del alfabeto: {ajenos}")
-
-    print(formatear(simular(afn, afd, minimo, cadena)))
+    print(formatear(analisis.resultado))
 
 
 def resolver_ruta(nombre: str) -> Path:
@@ -165,12 +152,68 @@ def leer_expresiones(ruta: Path) -> List[str]:
         return [linea.strip() for linea in archivo if linea.strip()]
 
 
-def main() -> int:
-    solicitado = sys.argv[1] if len(sys.argv) > 1 else ARCHIVO_POR_OMISION
-    # Se distingue "no se pidió simular" de "simular la cadena vacía".
-    cadena = sys.argv[2] if len(sys.argv) > 2 else None
+def escribir_reporte(
+    destino: str,
+    analisis: List[Analisis],
+    cadena: Optional[str],
+    archivo: str,
+) -> Path:
+    """Genera el reporte HTML y lo guarda, creando la carpeta si hace falta."""
+    ruta = Path(destino)
+    if not ruta.is_absolute():
+        ruta = Path.cwd() / ruta
 
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(a_html(analisis, cadena, archivo), encoding="utf-8")
+    return ruta
+
+
+def construir_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Analizador léxico: expresión regular -> AFN -> AFD -> AFD mínimo.",
+        epilog="Con --html el reporte se abre en el navegador y de ahí se "
+        'obtiene un PDF con "Imprimir -> Guardar como PDF".',
+    )
+    parser.add_argument(
+        "archivo",
+        nargs="?",
+        default=ARCHIVO_POR_OMISION,
+        help="archivo con una expresión regular por línea (por omisión: expresiones.txt)",
+    )
+    parser.add_argument(
+        "cadena",
+        nargs="?",
+        default=None,
+        help='cadena w a simular; para la cadena vacía se pasa ""',
+    )
+    # Son dos banderas y no una con valor opcional a propósito: con
+    # `--html [RUTA]` argparse no puede distinguir la ruta del reporte
+    # del archivo de expresiones, y el orden de los argumentos pasaría a
+    # cambiar el significado del comando.
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help=f"escribe un reporte HTML en vez de volcar todo a la consola "
+        f"(por omisión en {REPORTE_POR_OMISION})",
+    )
+    parser.add_argument(
+        "--salida",
+        default=None,
+        metavar="RUTA",
+        help="ruta del reporte HTML; implica --html",
+    )
+    return parser
+
+
+def main() -> int:
+    argumentos = construir_parser().parse_args()
+    solicitado = argumentos.archivo
     ruta = resolver_ruta(solicitado)
+
+    # Indicar la ruta de salida implica querer el reporte.
+    destino_html = argumentos.salida or (
+        REPORTE_POR_OMISION if argumentos.html else None
+    )
 
     encabezado()
 
@@ -190,20 +233,44 @@ def main() -> int:
 
     print(f"Archivo    : {ruta}")
     print(f"Expresiones: {len(expresiones)}")
-    if cadena is not None:
-        print(f"Cadena w   : {cadena!r}" if cadena else "Cadena w   : (vacía)")
+    if argumentos.cadena is not None:
+        print(
+            f"Cadena w   : {argumentos.cadena!r}"
+            if argumentos.cadena
+            else "Cadena w   : (vacía)"
+        )
 
-    fallidas = 0
-    for numero, expresion in enumerate(expresiones, start=1):
+    analisis = [analizar(expresion, argumentos.cadena) for expresion in expresiones]
+    fallidas = sum(1 for uno in analisis if not uno.valido)
+
+    if destino_html is None:
+        for numero, uno in enumerate(analisis, start=1):
+            imprimir(uno, numero)
+    else:
+        # Con --html la consola solo resume; el detalle va al archivo.
+        print()
+        for numero, uno in enumerate(analisis, start=1):
+            if uno.valido:
+                print(
+                    f"  #{numero} {uno.expresion:<24} "
+                    f"AFN {len(uno.afn.estados):>3}  "
+                    f"AFD {len(uno.afd.estados):>3}  "
+                    f"mínimo {len(uno.minimo.estados):>3}"
+                )
+            else:
+                print(f"  #{numero} {uno.expresion:<24} error de sintaxis")
+
         try:
-            procesar(expresion, numero, cadena)
-        except ErrorAnalizador as error:
-            fallidas += 1
-            print()
-            print(separador())
-            print(f"EXPRESIÓN #{numero}: {expresion}")
-            print(separador())
-            print(f"[ERROR] {error}")
+            destino = escribir_reporte(
+                destino_html, analisis, argumentos.cadena, str(ruta)
+            )
+        except OSError as error:
+            print(f"\n[ERROR] No se pudo escribir el reporte: {error}")
+            return 1
+
+        print()
+        print(f"Reporte escrito en: {destino}")
+        print("Ábrelo en el navegador; para PDF usa Imprimir -> Guardar como PDF.")
 
     print()
     print(separador())

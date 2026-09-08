@@ -28,9 +28,15 @@ python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt                 # otro archivo de expresiones
 python3 main.py expresiones.txt abba             # además simula w = "abba"
 python3 main.py expresiones.txt ""               # simula la cadena vacía
+python3 main.py --html                           # reporte HTML en salida/reporte.html
+python3 main.py --salida reporte.html            # reporte en otra ruta
 ```
 
 El archivo de entrada lleva una expresión regular por línea.
+
+Con `--html` el resultado se escribe como página web en vez de volcarse a la
+consola: tablas de transiciones legibles, una sección por expresión. Se abre en
+cualquier navegador y de ahí sale un PDF con **Imprimir → Guardar como PDF**.
 
 ## Pruebas
 
@@ -38,7 +44,7 @@ El archivo de entrada lleva una expresión regular por línea.
 python3 -m unittest discover -s tests -v
 ```
 
-91 pruebas, todas pasando.
+109 pruebas, todas pasando.
 
 ## Sintaxis de entrada
 
