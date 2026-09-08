@@ -38,7 +38,7 @@ El archivo de entrada lleva una expresión regular por línea.
 python3 -m unittest discover -s tests -v
 ```
 
-83 pruebas, todas pasando.
+91 pruebas, todas pasando.
 
 ## Sintaxis de entrada
 

@@ -43,7 +43,7 @@ python3 main.py                                  # usa expresiones.txt
 python3 main.py otro_archivo.txt                 # otro archivo de expresiones
 python3 main.py expresiones.txt abba             # además simula w = "abba"
 python3 main.py expresiones.txt ""               # simula la cadena vacía
-python3 -m unittest discover -s tests -v         # ejecuta las 83 pruebas
+python3 -m unittest discover -s tests -v         # ejecuta las 91 pruebas
 ```
 
 Para cada expresión el programa imprime la tokenización, el postfix, el árbol
@@ -74,7 +74,7 @@ proyecto1_teoria_computacion/
 │       └── afd.py          Objeto AFD
 ├── docs/
 │   └── DISEÑO.md           Este documento
-├── tests/                  83 pruebas unitarias
+├── tests/                  91 pruebas unitarias
 ├── main.py                 Interfaz de línea de comandos
 └── expresiones.txt         Las cuatro expresiones del curso
 ```
@@ -450,7 +450,7 @@ alteraría el árbol sintáctico que corresponde a la expresión dada.
 
 ## 10. Pruebas
 
-83 pruebas unitarias, todas pasando:
+91 pruebas unitarias, todas pasando:
 
 | Archivo | Pruebas | Cubre |
 |---|---|---|
@@ -459,6 +459,7 @@ alteraría el árbol sintáctico que corresponde a la expresión dada.
 | `test_fase03.py` | 11 | Construcción de subconjuntos y equivalencia AFN ↔ AFD |
 | `test_fase04.py` | 14 | Minimización, tamaños y partición esperados |
 | `test_fase05.py` | 15 | Simulación, recorridos y comparación entre autómatas |
+| `test_main.py` | 8 | Interfaz de línea de comandos: ubicación del archivo, simulación y manejo de errores |
 
 La verificación más fuerte del proyecto es la **equivalencia exhaustiva**: para cada
 expresión del curso se generan todas las cadenas de longitud 0 a 5 sobre su alfabeto

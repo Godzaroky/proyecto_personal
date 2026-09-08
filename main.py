@@ -20,6 +20,7 @@ vacía se pasa una cadena vacía explícita:
 """
 
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 # En Windows la consola suele usar cp1252, que no puede imprimir ε, ├, └, etc.
@@ -36,6 +37,12 @@ from analizador.thompson import construir as construir_afn
 from analizador.tokens import alfabeto_de, preparar, tokens_a_texto
 
 ANCHO = 72
+
+# Carpeta donde vive main.py. El archivo de expresiones se busca aquí
+# cuando no se encuentra en el directorio actual, para que el programa
+# funcione igual sin importar desde dónde se invoque.
+AQUI = Path(__file__).resolve().parent
+ARCHIVO_POR_OMISION = "expresiones.txt"
 
 
 def separador(caracter: str = "=") -> str:
@@ -129,23 +136,56 @@ def procesar(expresion: str, numero: int, cadena: Optional[str] = None) -> None:
     print(formatear(simular(afn, afd, minimo, cadena)))
 
 
-def leer_expresiones(ruta: str) -> List[str]:
+def resolver_ruta(nombre: str) -> Path:
+    """
+    Ubica el archivo de expresiones.
+
+    Se prueba primero tal como se escribió, relativo al directorio desde
+    el que se invocó el programa. Si ahí no está, se busca junto a
+    main.py: así `python main.py` funciona aunque se ejecute desde otra
+    carpeta o desde un IDE con otro directorio de trabajo.
+
+    Si no aparece en ninguno de los dos lugares se devuelve la ruta
+    original, para que el error mencione lo que el usuario escribió.
+    """
+    candidata = Path(nombre)
+    if candidata.is_file():
+        return candidata
+
+    junto_al_programa = AQUI / candidata
+    if junto_al_programa.is_file():
+        return junto_al_programa
+
+    return candidata
+
+
+def leer_expresiones(ruta: Path) -> List[str]:
     """Lee el archivo y devuelve las líneas no vacías."""
     with open(ruta, "r", encoding="utf-8") as archivo:
         return [linea.strip() for linea in archivo if linea.strip()]
 
 
 def main() -> int:
-    ruta = sys.argv[1] if len(sys.argv) > 1 else "expresiones.txt"
+    solicitado = sys.argv[1] if len(sys.argv) > 1 else ARCHIVO_POR_OMISION
     # Se distingue "no se pidió simular" de "simular la cadena vacía".
     cadena = sys.argv[2] if len(sys.argv) > 2 else None
+
+    ruta = resolver_ruta(solicitado)
 
     encabezado()
 
     try:
         expresiones = leer_expresiones(ruta)
     except FileNotFoundError:
-        print(f"[ERROR] No se encontró el archivo '{ruta}'.")
+        print(f"[ERROR] No se encontró el archivo '{solicitado}'.")
+        desde_aqui = Path(solicitado).resolve()
+        junto_al_programa = (AQUI / solicitado).resolve()
+        print(f"        Se buscó en : {desde_aqui}")
+        if junto_al_programa != desde_aqui:
+            print(f"        y también en: {junto_al_programa}")
+        return 1
+    except OSError as error:
+        print(f"[ERROR] No se pudo leer '{solicitado}': {error}")
         return 1
 
     print(f"Archivo    : {ruta}")
